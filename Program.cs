@@ -25,7 +25,7 @@ class Program
         var upgrader = DeployChanges.To
             .SqlDatabase(connectionString)
             .WithScriptsFromFileSystem("Scripts")
-             .WithTransactionPerScript()  // Use transaction for each script
+            .WithTransactionPerScript()  // Use transaction for each script
             .LogToConsole()
             .Build();
 
