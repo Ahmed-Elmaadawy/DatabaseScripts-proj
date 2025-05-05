@@ -58,6 +58,7 @@ class Program
                 {
                     hasErrors = true;
                     Log($"{timestamp} | {db.Name} | {script.Name} | FAILED | {result.Error.Message}", ConsoleColor.Red);
+                    break;
                 }
                 else
                 {
