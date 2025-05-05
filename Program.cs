@@ -1,18 +1,20 @@
 ﻿using DbUp;
+using DbUp.ScriptProviders;
+using DbUp.Engine;
+using DbUp.Engine.Output;
 using System;
-using System.Linq;  // Make sure to include this for LINQ methods like FirstOrDefault
+using System.Linq;
 using System.IO;
 
 class Program
 {
     static int Main(string[] args)
     {
-        // Get connection string, fallback to default if not provided
         var connectionString = args.FirstOrDefault()
-            ?? "Server=Dev_Backend_PC1; Database=TestScripts; Trusted_connection=true ; TrustServerCertificate=true ";
-      
-        //if database does not exist, create it with the given database name
+            ?? "Server=Dev_Backend_PC1; Database=TestScripts; Trusted_connection=true; TrustServerCertificate=true";
+
         EnsureDatabase.For.SqlDatabase(connectionString);
+
         if (string.IsNullOrEmpty(connectionString))
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -21,29 +23,47 @@ class Program
             return -1;
         }
 
-        // Setup DbUp to run SQL scripts from 'Scripts' folder
-        var upgrader = DeployChanges.To
-            .SqlDatabase(connectionString)
-            .WithScriptsFromFileSystem("Scripts")
-            .WithTransactionPerScript()  // Use transaction for each script
-            .LogToConsole()
-            .Build();
+        var scriptsPath = "Scripts";
 
-        // Perform the upgrade (run the scripts)
-        var result = upgrader.PerformUpgrade();
+        var scripts = new FileSystemScriptProvider(scriptsPath).GetScripts(null).ToList();
+        bool hasErrors = false;
 
-        if (!result.Successful)
+        foreach (var script in scripts)
         {
-            // Print error in red
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine(result.Error);
+            var upgrader = DeployChanges.To
+                .SqlDatabase(connectionString)
+                .WithScripts(new[] { script })
+                .WithTransactionPerScript()
+                .LogToConsole()
+                .Build();
+
+            var result = upgrader.PerformUpgrade();
+
+            if (!result.Successful)
+            {
+                hasErrors = true;
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Error in script {script.Name}: {result.Error.Message}");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"Script {script.Name} ran successfully.");
+                Console.ResetColor();
+            }
+        }
+
+        if (hasErrors)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Completed with errors. Check the logs above.");
             Console.ResetColor();
             return -1;
         }
 
-        // Success message in green
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("Success!");
+        Console.WriteLine("All scripts executed successfully.");
         Console.ResetColor();
         return 0;
     }
