@@ -36,7 +36,7 @@ class Program
 
         foreach (var db in databases)
         {
-            Log($"=== Upgrading {db.Name} ===", ConsoleColor.Cyan);
+            Log($"====== Upgrading {db.Name} ======", ConsoleColor.Cyan);
             EnsureDatabase.For.SqlDatabase(db.ConnectionString);
 
             var scripts = new FileSystemScriptProvider(db.ScriptPath).GetScripts(null).ToList();
