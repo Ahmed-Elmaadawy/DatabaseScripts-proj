@@ -7,64 +7,73 @@ using System.Linq;
 using System.IO;
 
 class Program
+             
 {
     static int Main(string[] args)
     {
-        var connectionString = args.FirstOrDefault()
-            ?? "Server=Dev_Backend_PC1; Database=TestScripts; Trusted_connection=true; TrustServerCertificate=true";
-
-        EnsureDatabase.For.SqlDatabase(connectionString);
-
-        if (string.IsNullOrEmpty(connectionString))
+      var databases = new[]
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Connection string is missing.");
+            new { Name = "LocalDB", ConnectionString = "Server=Dev_Backend_PC1; Database=TestScripts; Trusted_connection=true; TrustServerCertificate=true", ScriptPath = "Scripts" },
+        };
+
+        var logsFolder = "Logs";
+        Directory.CreateDirectory(logsFolder);
+
+        var logFile = Path.Combine(logsFolder, $"UpgradeLog_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt");
+
+        using var logWriter = new StreamWriter(logFile);
+
+        void Log(string message, ConsoleColor color = ConsoleColor.White)
+        {
+            Console.ForegroundColor = color;
+            Console.WriteLine(message);
             Console.ResetColor();
-            return -1;
+            logWriter.WriteLine(message);
+            logWriter.Flush();
         }
 
-        var scriptsPath = "Scripts";
-
-        var scripts = new FileSystemScriptProvider(scriptsPath).GetScripts(null).ToList();
         bool hasErrors = false;
 
-        foreach (var script in scripts)
+        foreach (var db in databases)
         {
-            var upgrader = DeployChanges.To
-                .SqlDatabase(connectionString)
-                .WithScripts(new[] { script })
-                .WithTransactionPerScript()
-                .LogToConsole()
-                .Build();
+            Log($"=== Upgrading {db.Name} ===", ConsoleColor.Cyan);
+            EnsureDatabase.For.SqlDatabase(db.ConnectionString);
 
-            var result = upgrader.PerformUpgrade();
+            var scripts = new FileSystemScriptProvider(db.ScriptPath).GetScripts(null).ToList();
 
-            if (!result.Successful)
+            foreach (var script in scripts)
             {
-                hasErrors = true;
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"Error in script {script.Name}: {result.Error.Message}");
-                Console.ResetColor();
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"Script {script.Name} ran successfully.");
-                Console.ResetColor();
+                var upgrader = DeployChanges.To
+                    .SqlDatabase(db.ConnectionString)
+                    .WithScripts(new[] { script })
+                    .WithTransactionPerScript()
+                    .LogToConsole()
+                    .Build();
+
+                var result = upgrader.PerformUpgrade();
+
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                if (!result.Successful)
+                {
+                    hasErrors = true;
+                    Log($"{timestamp} | {db.Name} | {script.Name} | FAILED | {result.Error.Message}", ConsoleColor.Red);
+                }
+                else
+                {
+                    Log($"{timestamp} | {db.Name} | {script.Name} | SUCCESS", ConsoleColor.Green);
+                }
             }
         }
 
         if (hasErrors)
         {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("Completed with errors. Check the logs above.");
-            Console.ResetColor();
+            Log("Completed with errors across one or more databases. Check logs.", ConsoleColor.Yellow);
             return -1;
         }
 
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("All scripts executed successfully.");
-        Console.ResetColor();
+        Log("All databases upgraded successfully.", ConsoleColor.Green);
         return 0;
+    
     }
 }
