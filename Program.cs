@@ -47,6 +47,7 @@ class Program
                     .SqlDatabase(db.ConnectionString)
                     .WithScripts(new[] { script })
                     .WithTransactionPerScript()
+                    .WithExecutionTimeout(TimeSpan.FromMinutes(5))
                     .LogToConsole()
                     .Build();
 
